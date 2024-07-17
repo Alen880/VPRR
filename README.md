@@ -8,13 +8,17 @@ Pytorch implementation of VPRR.
 
 Vessel Preservation Based Reflection Removal in Fundus Images
 
-![](..\figures\z6.png)
+<p align="center">
+  <img src="figures\z6.png">
+</p>
 
 ## Reflection Removal Algorithm in Fundus images
 
 Fundus images play a crucial role in diagnosing diseases like diabetic retinopathy (DR) and glaucoma. The quality of these images significantly impacts subsequent tasks. However, some equipment may produce low-quality fundus images with reflective areas caused by neuronal reflections. This study aims to improve fundus image quality by removing reflections. To address the challenge of the absence of ground truth data, a pseudo reflection generation algorithm is introduced to create paired data for training. Moreover, we introduce a reflection removal model that efficiently eliminates reflective regions while preserving the integrity of vascular structures in the fundus images. To address potential vascular degradation during the process of reflection removal, a vascular loss function is proposed to mitigate this issue. Our model shows promising results on both our dataset and the public datasets. We also demonstrate the applicability of this approach to downstream tasks such as vascular segmentation.
 
-![](..\figures\z4.png)
+<p align="center">
+  <img src="figures/z4.png">
+</p>
 
 ## Installation
 
@@ -22,7 +26,7 @@ Fundus images play a crucial role in diagnosing diseases like diabetic retinopat
 * Clone this repo
 
 ```
-git clone https://github.com/xmengli999/CANet
+git clone https://github.com/Alen880/VPRR-main
 cd CANet
 ```
 
