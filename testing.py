@@ -11,7 +11,7 @@ import torch.optim as optim
 from datasets.datasets_pairs import my_dataset, my_dataset_eval, my_dataset_wTxt, FusionDataset
 import torchvision.transforms as transforms
 
-from networks.UFPNet_code_uncertainty_arch import UFPNet_code_uncertainty
+from networks.UFPNet_code_uncertainty_arch import Reflection_Removal_Model
 from utils.UTILS import compute_psnr, MixUp_AUG, rand_bbox, compute_ssim
 import matplotlib.image as img
 
@@ -71,40 +71,12 @@ parser.add_argument('--experiment_name', type=str,
                     default="testing_NAFNet_512")  # modify the experiments name-->modify all save path
 parser.add_argument('--unified_path', type=str, default='')
 # parser.add_argument('--model_save_dir', type=str, default= )#required=True
-parser.add_argument('--training_data_path', type=str,
-                    default='/gdata1/zhuyr/Deref/training_data/')
-# parser.add_argument('--training_data_path_Txt', type=str, default='/gdata1/zhuyr/Deref/training_data/Ref_HZ1.txt')
-parser.add_argument('--training_data_path_Txt', nargs='*', help='a list of strings')
-parser.add_argument('--training_data_path_Txt1', nargs='*', help='a list of strings')
+parser.add_argument('--training_data_path', type=str, default='datasets/training_data/')
+parser.add_argument('--eval_in_path', type=str, default='datasets/eval_data/')
+parser.add_argument('--eval_gt_path', type=str, default='datasets/eval_data/')
 # --experiment_name SIRRwPreD --EPOCH 150 --T_period 50 --Crop_patches 320 --training_data_path_Txt '/mnt/data_oss/ReflectionData/SIRR_USTC/DeRef_USTC_wPreD.txt'
 
 parser.add_argument('--writer_dir', type=str, default='/gdata1/zhuyr/Deref/Deref_RW_writer_logs/')
-
-parser.add_argument('--eval_in_path_nature20', type=str, default='/gdata1/zhuyr/Deref/training_data/nature20/blended//')
-parser.add_argument('--eval_gt_path_nature20', type=str,
-                    default='/gdata1/zhuyr/Deref/training_data/nature20/transmission_layer/')
-
-parser.add_argument('--eval_in_path_real20', type=str, default='/gdata1/zhuyr/Deref/training_data/real20/blended/')
-parser.add_argument('--eval_gt_path_real20', type=str,
-                    default='/gdata1/zhuyr/Deref/training_data/real20/transmission_layer/')
-
-parser.add_argument('--eval_in_path_wild55', type=str, default='datasets/eval_data/wild55/blended/')
-parser.add_argument('--eval_gt_path_wild55', type=str,
-                    default='datasets/eval_data/wild55/transmission_layer/')
-
-parser.add_argument('--eval_in_path_soild200', type=str, default='/gdata1/zhuyr/Deref/training_data/solid200/blended/')
-parser.add_argument('--eval_gt_path_soild200', type=str,
-                    default='/gdata1/zhuyr/Deref/training_data/solid200/transmission_layer/')
-
-parser.add_argument('--eval_in_path_postcard199', type=str,
-                    default='/gdata1/zhuyr/Deref/training_data/postcard199/blended/')
-parser.add_argument('--eval_gt_path_postcard199', type=str,
-                    default='/gdata1/zhuyr/Deref/training_data/postcard199/transmission_layer/')
-
-parser.add_argument('--eval_in_path_SIR', type=str, default='/gdata1/zhuyr/Deref/training_data/SIR/blended/')
-parser.add_argument('--eval_gt_path_SIR', type=str, default='/gdata1/zhuyr/Deref/training_data/SIR/transmission_layer/')
-
-parser.add_argument('--eval_in_path_RW', type=str, default='/gdata1/zhuyr/Deref/training_data/real_wogt/blended/')
 
 parser.add_argument('--SAVE_test_Results', type=bool, default=True)
 
@@ -124,9 +96,9 @@ parser.add_argument('--middle_blk_num', type=int, default=1)
 parser.add_argument('--fusion_ratio', type=float, default=0.7)
 
 parser.add_argument('--load_pre_model', type=str2bool, default=True)  # VGG
-parser.add_argument('--pre_model', type=str, default='./train/NAFNet/qianyi_Net_epoch_1_iters_112_psnr_53.2157.pth')
+parser.add_argument('--pre_model', type=str, default='.')
 parser.add_argument('--pre_model1', type=str,
-                    default='./train/NAFNet/qianyi_Net_Det_epoch_1_iters_112_psnr_53.2157.pth')
+                    default='.')
 
 parser.add_argument('--pre_model_strict', type=str2bool, default=False)  # VGG
 
@@ -167,7 +139,7 @@ unified_path = args.unified_path
 trans_eval = transforms.Compose(
     [
         transforms.ToTensor(),
-        # transforms.Resize((256, 256))
+        transforms.Resize((256, 256))
     ])
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
@@ -188,22 +160,6 @@ def test(net, net_Det, eval_loader, Dname='S', SAVE_test_Results=False):
             infer_st = time.time()
             sparse_out = net_Det(inputs)
             outputs = net(inputs, sparse_out)
-
-            # labels_gbr = labels[:, [2, 1, 0], :, :]
-            # outputs_gbr = outputs[:, [2, 1, 0], :, :]
-            # v_label = v_net(labels_gbr)
-            # v_output = v_net(outputs_gbr)
-            #
-            # import matplotlib.pyplot as plt
-            # img = v_label[0, 0].detach().cpu().numpy()
-            # plt.imshow(img, cmap='gray')
-            # plt.axis('off')  # 关闭坐标轴
-            # plt.show()
-            #
-            # img = v_output[0, 0].detach().cpu().numpy()
-            # plt.imshow(img, cmap='gray')
-            # plt.axis('off')  # 关闭坐标轴
-            # plt.show()
 
             eval_results['infer_time'] += time.time() - infer_st
             eval_results['eval_input_psnr'] += compute_psnr(inputs, labels)
@@ -267,32 +223,18 @@ def print_param_number(net):
     print('#generator parameters:', sum(param.numel() for param in net.parameters()))
 
 
-def check_dataset(in_path, gt_path, name='RD'):
-    print("Check {} length({}) len(in)==len(gt)?: {} ".format(name, len(os.listdir(in_path)),
-                                                              os.listdir(in_path) == os.listdir(gt_path)))
-
-
-'''
-python  /ghome/zhuyr/Deref_RW/testing_reflection_wNAFNetwDetEnc_wDDP_wJointDetSparse_V3_saveImg.py  --experiment_name testing-final   --enc_blks 1 1 1 28  --middle_blk_num 1  --dec_blks 1 1  1  1  --concat True  --merge_manner 0   --pre_model /gdata1/zhuyr/Deref/Deref_RW/DeRWref_wFusion-wFT-V3_10_5/SIRR_best-postcard199-wEMA__24.1_Epoch-0_iters-190.pth   --pre_model1  /gdata1/zhuyr/Deref/Deref_RW/DeRWref_wFusion-wFT-V3_10_3/SIRR_Det_best-real20__23.8_Epoch-0_iters-50.pth  --load_pre_model True    
-'''
 if __name__ == '__main__':
     print(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
     print("==" * 50)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print('device:', device)
 
-    net = NAFNet_wDetHead(img_channel=args.img_channel, width=args.base_channel, middle_blk_num=args.middle_blk_num,
-                          enc_blk_nums=args.enc_blks, dec_blk_nums=args.dec_blks, global_residual=args.global_skip,
-                          drop_flag=args.drop_flag, drop_rate=args.drop_rate,
-                          concat=args.concat, merge_manner=args.merge_manner)
-    # net = Uformer(img_size=256, embed_dim=16, win_size=8, mlp_ratio=4., token_projection='linear', token_mlp='leff',
-    #               modulator=True)
-    # net = UFPNet_code_uncertainty(img_channel=args.img_channel, width=args.base_channel,
-    #                               middle_blk_num=args.middle_blk_num,
-    #                               enc_blk_nums=args.enc_blks, dec_blk_nums=args.dec_blks,
-    #                               drop_flag=args.drop_flag, drop_rate=args.drop_rate)
+    net = Reflection_Removal_Model(img_channel=args.img_channel, width=args.base_channel,
+                                   middle_blk_num=args.middle_blk_num,
+                                   enc_blk_nums=args.enc_blks, dec_blk_nums=args.dec_blks,
+                                   drop_flag=args.drop_flag, drop_rate=args.drop_rate)
+
     net_Det = RefDet(backbone='efficientnet-b3',
                      proj_planes=16,
                      pred_planes=32,
@@ -314,16 +256,6 @@ if __name__ == '__main__':
     net_Det.to(device)
     net.to(device)
 
-    # wnet = UNet()
-    # checkpoint = torch.load('ckpt/unet.pth', map_location=device)
-    # wnet.load_state_dict(checkpoint)
-    # print('sucess!  load wnet(v_loss)')
-    # wnet = wnet.to(device)
-    # for param in wnet.parameters():
-    #     param.requires_grad = False  # 冻结 wnet 的所有参数
-    # wnet.eval()
+    eval_loader_wild55 = get_eval_data(val_in_path=args.eval_in_path, val_gt_path=args.eval_gt_path)
 
-    check_dataset(args.eval_in_path_wild55, args.eval_gt_path_wild55, 'val-wild55')
-    eval_loader_wild55 = get_eval_data(val_in_path=args.eval_in_path_wild55, val_gt_path=args.eval_gt_path_wild55)
-
-    test(net=net, net_Det=net_Det, eval_loader=eval_loader_wild55, Dname='wild55', SAVE_test_Results=True)
+    test(net=net, net_Det=net_Det, eval_loader=eval_loader_wild55, Dname='DR', SAVE_test_Results=True)

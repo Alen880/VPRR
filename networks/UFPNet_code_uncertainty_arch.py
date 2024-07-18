@@ -303,7 +303,7 @@ class wnet(torch.nn.Module):
         return x2
 
 
-class UFPNet_code_uncertainty(nn.Module):
+class Reflection_Removal_Model(nn.Module):
     def __init__(self, img_channel=3, width=64, middle_blk_num=1, enc_blk_nums=[], dec_blk_nums=[],
                  drop_flag=True, drop_rate=0.4, kernel_size=19, n_classes=1, in_c=3,
                  layers=(8, 16, 32), conv_bridge=True, shortcut=True):
@@ -401,16 +401,16 @@ class UFPNet_code_uncertainty(nn.Module):
         for param in self.create_ves.parameters():
             param.requires_grad = False
 
-    def forward(self, inp, spare_ref):
+    def forward(self, inp, spare_ref, x2):
         B, C, H, W = inp.shape
         inp = self.check_image_size(inp)
 
-        # ves_s = inp * x2
+        ves_s = inp * x2
 
-        # non_zero_indices = (spare_ref != 0) & (x2 != 1)
-        # x3 = torch.zeros_like(spare_ref)
-        # x3[non_zero_indices] = spare_ref[non_zero_indices]
-        # spare_ref = x3
+        non_zero_indices = (spare_ref != 0) & (x2 != 1)
+        x3 = torch.zeros_like(spare_ref)
+        x3[non_zero_indices] = spare_ref[non_zero_indices]
+        spare_ref = x3
 
         with torch.no_grad():
             # kernel estimation: size [B, H*W, 19, 19]
@@ -432,7 +432,7 @@ class UFPNet_code_uncertainty(nn.Module):
                                                         inp.shape[3])
 
         x = self.intro(inp)
-        # ves = self.intro(ves_s)
+        ves = self.intro(ves_s)
 
         fea_sparse = self.intro_Det(spare_ref)
         fea_sparse = self.DetEnc(fea_sparse)
@@ -440,15 +440,15 @@ class UFPNet_code_uncertainty(nn.Module):
         x = self.Merge_conv(x)
 
         encs = []
-        # mask_128 = self.a_pool_128(x2)
+        mask_128 = self.a_pool_128(x2)
 
         for i, (encoder, down, kernel_down, conv_layer) in enumerate(zip(
                 self.encoders, self.downs, self.kernel_down, self.conv_layers_d)):
-            # x = torch.cat([x, ves], dim=1)
-            # x = conv_layer(x.cpu())
-            # x = x.cuda()
-            # if i == 1:
-            #     x = x * mask_128.expand_as(x) + x
+            x = torch.cat([x, ves], dim=1)
+            x = conv_layer(x.cpu())
+            x = x.cuda()
+            if i == 1:
+                x = x * mask_128.expand_as(x) + x
             if len(encoder) == 1:
                 # x = encoder[0](x)
                 x = encoder[0](x, kernel)
@@ -458,7 +458,7 @@ class UFPNet_code_uncertainty(nn.Module):
 
             encs.append(x)
             x = down(x)
-            # ves = down(ves)
+            ves = down(ves)
 
         x = self.middle_blks(x)
         # mask_16 = self.a_pool_16(x2)
@@ -480,8 +480,6 @@ class UFPNet_code_uncertainty(nn.Module):
         x = x + inp
         x = torch.clamp(x, 0.0, 1.0)
 
-        # x = F.interpolate(x, size=(512, 512), mode='bilinear', align_corners=False)
-
         return x
 
     def check_image_size(self, x):
@@ -492,10 +490,10 @@ class UFPNet_code_uncertainty(nn.Module):
         return x
 
 
-class UFPNet_code_uncertainty_Local(Local_Base, UFPNet_code_uncertainty):
+class ReflectionRemovalModel_Local(Local_Base, Reflection_Removal_Model):
     def __init__(self, *args, train_size=(1, 3, 256, 256), fast_imp=False, **kwargs):
         Local_Base.__init__(self)
-        UFPNet_code_uncertainty.__init__(self, *args, **kwargs)
+        Reflection_Removal_Model.__init__(self, *args, **kwargs)
 
         N, C, H, W = train_size
         base_size = (int(H * 1.5), int(W * 1.5))
@@ -515,8 +513,8 @@ if __name__ == '__main__':
     # net = NAFNet_wDetHead(img_channel=img_channel, width=width, middle_blk_num=middle_blk_num,
     #                       enc_blk_nums=enc_blks, dec_blk_nums=dec_blks, global_residual=True,
     #                       concat=True, merge_manner=2)  # .cuda()
-    net = UFPNet_code_uncertainty(img_channel=img_channel, width=width, middle_blk_num=middle_blk_num,
-                                  enc_blk_nums=enc_blks, dec_blk_nums=dec_blks)
+    net = Reflection_Removal_Model(img_channel=img_channel, width=width, middle_blk_num=middle_blk_num,
+                                   enc_blk_nums=enc_blks, dec_blk_nums=dec_blks)
     input = torch.randn([4, 3, 256, 256])  # .cuda()  inp_shape = (5, 3, 128, 128)
     spare = torch.randn([4, 1, 256, 256])
     mask = torch.randn([4, 1, 256, 256])

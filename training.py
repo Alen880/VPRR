@@ -13,7 +13,7 @@ import functools
 from torchmetrics.functional import structural_similarity_index_measure as ssim
 
 from networks.NAFNet_arch import NAFNet_wDetHead
-from networks.UFPNet_code_uncertainty_arch import UFPNet_code_uncertainty, wnet
+from networks.UFPNet_code_uncertainty_arch import Reflection_Removal_Model, wnet
 from networks.Uformer_arch import Uformer
 from networks.denoising_diffusion_pytorch import GaussianDiffusion, Unet
 from datasets.datasets_pairs import my_dataset, my_dataset_eval, my_dataset_wTxt, FusionDataset
@@ -88,9 +88,8 @@ parser.add_argument('--experiment_name', type=str,
                     default="train")  # modify the experiments name-->modify all save path
 parser.add_argument('--writer_dir', type=str, default='logs/')
 parser.add_argument('--training_data_path', type=str, default='datasets/training_data/')
-parser.add_argument('--eval_in_path_wild55', type=str, default='datasets/eval_data/')
-parser.add_argument('--eval_gt_path_wild55', type=str,
-                    default='datasets/eval_data/')
+parser.add_argument('--eval_in_path', type=str, default='datasets/eval_data/')
+parser.add_argument('--eval_gt_path', type=str, default='datasets/eval_data/')
 # training setting
 parser.add_argument('--EPOCH', type=int, default=500)
 parser.add_argument('--T_period', type=int, default=50)  # CosineAnnealingWarmRestarts
@@ -210,11 +209,6 @@ trans_eval = transforms.Compose(
     ])
 
 
-def check_dataset(in_path, gt_path, name='RD'):
-    print("Check {} length({}) len(in)==len(gt)?: {} ".format(name, len(os.listdir(in_path)),
-                                                              os.listdir(in_path) == os.listdir(gt_path)))
-
-
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 MAX_PSNR = 0.0
@@ -235,7 +229,7 @@ def test(net, net_Det, eval_loader, epoch=1, iters=100, max_psnr_val=MAX_PSNR, D
             labels = Variable(label).to(device)
             mask = wnet(inputs)
             sparse_out = net_Det(inputs)
-            outputs = net(inputs, sparse_out)
+            outputs = net(inputs, sparse_out, mask)
             out_v = wnet(outputs)
 
             eval_input_psnr += compute_psnr(inputs, labels)
@@ -361,10 +355,10 @@ if __name__ == '__main__':
         param.requires_grad = False
     wnet.eval()
 
-    net = UFPNet_code_uncertainty(img_channel=args.img_channel, width=args.base_channel,
-                                  middle_blk_num=args.middle_blk_num,
-                                  enc_blk_nums=args.enc_blks, dec_blk_nums=args.dec_blks,
-                                  drop_flag=args.drop_flag, drop_rate=args.drop_rate)
+    net = Reflection_Removal_Model(img_channel=args.img_channel, width=args.base_channel,
+                                   middle_blk_num=args.middle_blk_num,
+                                   enc_blk_nums=args.enc_blks, dec_blk_nums=args.dec_blks,
+                                   drop_flag=args.drop_flag, drop_rate=args.drop_rate)
 
     net_Det = RefDet(backbone='efficientnet-b3',
                      proj_planes=16,
@@ -388,8 +382,7 @@ if __name__ == '__main__':
     net.to(device)
 
     train_loader1_re = get_training_data()
-    check_dataset(args.eval_in_path_wild55, args.eval_gt_path_wild55, 'val-wild55')
-    eval_loader_wild55 = get_eval_data(val_in_path=args.eval_in_path_wild55, val_gt_path=args.eval_gt_path_wild55)
+    eval_loader_wild55 = get_eval_data(val_in_path=args.eval_in_path, val_gt_path=args.eval_gt_path)
 
     net_params = filter(lambda p: p.requires_grad, net.parameters())
     optimizerG = optim.Adam([{'params': net_params, 'lr': args.learning_rate},
@@ -472,18 +465,8 @@ if __name__ == '__main__':
             labels_sparse = Variable(data_sparse).to(device)
 
             r = np.random.rand()
-            if args.cutmix and (r < args.cutmix_prob):
-                lam = np.random.beta(1.0, 1.0)
-                rand_index = torch.randperm(inputs.size()[0]).to(device)  # cuda()
-                bbx1, bby1, bbx2, bby2 = rand_bbox(inputs.size(), lam)
-                inputs[:, :, bbx1: bbx2, bby1:bby2] = inputs[rand_index, :, bbx1:bbx2, bby1:bby2]
-                labels[:, :, bbx1: bbx2, bby1:bby2] = labels[rand_index, :, bbx1:bbx2, bby1:bby2]
-
-                sparse_out = net_Det(inputs)
-                train_output = net(inputs, sparse_out.detach())
-            else:
-                sparse_out = net_Det(inputs)
-                train_output = net(inputs, sparse_out.detach(), mask)
+            sparse_out = net_Det(inputs)
+            train_output = net(inputs, sparse_out.detach(), mask)
             v_out = wnet(train_output)
 
             input_PSNR = compute_psnr(inputs, labels)
@@ -565,4 +548,4 @@ if __name__ == '__main__':
             torch.save(net_Det.state_dict(), save_model_Det)
 
         test(net=net, net_Det=net_Det, eval_loader=eval_loader_wild55, epoch=epoch,
-             max_psnr_val=MAX_PSNR, iters=iter_nums, Dname='wild55', SAVE_test_Results=save_test_results)
+             max_psnr_val=MAX_PSNR, iters=iter_nums, Dname='DR', SAVE_test_Results=save_test_results)
