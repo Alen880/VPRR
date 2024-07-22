@@ -19,6 +19,14 @@ Fundus images play a crucial role in diagnosing diseases like diabetic retinopat
 <p align="center">
   <img src="figures/z4.png">
 </p>
+<p align="center">
+  <img src="figures/1.png">
+</p>
+
+<p align="center">
+  <img src="figures/2.png">
+</p>
+
 
 ## Installation
 
