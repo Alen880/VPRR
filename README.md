@@ -35,7 +35,7 @@ Fundus images play a crucial role in diagnosing diseases like diabetic retinopat
 
 ```
 git clone https://github.com/Alen880/VPRR
-cd CANet
+cd VPRR
 ```
 
 ## Data Preparation
